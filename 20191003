@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<meta http-equiv="X-UA-Compatible" content="ie=edge">
+
+	<link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/bootstrap/3.2.0/css/bootstrap.min.css">
+	<script src="//ajax.googleapis.com/ajax/libs/jquery/1.11.1/jquery.min.js"></script>
+	<title>Document</title>
+
+	<script>
+		var glIdCnt = 0;
+		//全てのタグにIDを付与する(もともとIDある場合未考慮)
+		function allIdPut(objTgtDom_i, strTagName_i) {
+			objTgtDom_i.setAttribute("id", strTagName_i + glIdCnt);
+			glIdCnt++;
+			for (var index = glIdCnt; index < objTgtDom_i.childElementCount; index++) {
+				var objActDom = objTgtDom_i.children[index];
+				objActDom.setAttribute("id", strTagName_i + index);
+				glIdCnt++;
+			} // for	
+			if (objTgtDom_i.childElementCount != 0) {
+				for (var index = 0; index < objTgtDom_i.childElementCount; index++) {
+					var objActDom = objTgtDom_i.children[index];
+					allIdPut(objActDom, strTagName_i);
+				} // for	
+			}//if		
+		} //function
+
+		//init
+		$(function () {
+			var objBodyDom = document.body;
+			var strTagName = "testTag";
+			allIdPut(objBodyDom, strTagName);
+
+		}); //$(function ()
+
+		//黒塗りにもspanがあったほうが制御しやすいため追加
+		var MASK_MSG = "■";
+		var MASK_BF = "<span class='aimask'>";
+		var MASK_AF = "</span>";
+		var RED_BF = "<span class='aired' style='color:#c9f522'>";
+		var RED_AF = "</span>";
+
+		/**
+		* HTMLのchar毎の情報を格納するクラス
+		* HashMap<Integer, HtmlStructure> の形で格納し、keyは置換対象外文字やtagを含んだポジション
+		* (<div>タグ等を含む)を格納する
+		*/
+		class HtmlStructure {
+			strTgt = ""; //対象文字
+			intPage = 0; //Page
+			intStatus = 0; //strTgtのステータス 0：置換対象外(半角文字等) 1：対象 2：tag
+			intNotTagPos = 0; //置換対象外文字やtagを抜いたときのポジション			
+		} //class
+
+		/**
+		* bodyの構造体hashを取得
+		* @param strOrgBody_i
+		* @return HtmlStructureのハッシュ
+		*/
+		function getBodyStructure(strOrgBody_i) {
+			var strTgtVal = strOrgBody_i;
+
+			var hashRetStructure = {};
+			var listLastNotTagPos = []; //intNotTagPosを格納していく
+			var strRegrep = "(<\\/?[^>]+>)|([^<]+)"; //タグとタグを除いた値をグループで取得する
+			var objPattern = new RegExp(strRegrep, "g");
+			var strCurrentKwd = ""; //現在ヒットしている単語
+			var intCurrentPos = 0;
+			var objRegRet;
+			while ((objRegRet = objPattern.exec(strTgtVal)) != null) {
+				strCurrentKwd = objRegRet[2];
+				if (strCurrentKwd == undefined) { //タグの処理
+					strCurrentKwd = objRegRet[1];
+					searchAnalysis(hashRetStructure, listLastNotTagPos, strCurrentKwd, intCurrentPos, 2);
+				} else if (strCurrentKwd == " ") { //半角スペース処理
+					searchAnalysis(hashRetStructure, listLastNotTagPos, strCurrentKwd, intCurrentPos, 0);
+					continue; //半角スペースはスキップ
+				} else { //通常文字
+					searchAnalysis(hashRetStructure, listLastNotTagPos, strCurrentKwd, intCurrentPos, 1);
+				} //if
+				intCurrentPos = Object.keys(hashRetStructure).length;
+			}  //while
+
+			return hashRetStructure;
+		} //function
+
+		/**
+		* 検索結果からbodyの構造体hashを作成する
+		* @param HashMap<Integer, HtmlStructure> hashRetStructure_i 参照渡しのハッシュ
+		* HtmlStructureはHTMLのchar毎の情報を格納するクラス
+		* HashMap<Integer, HtmlStructure> の形で格納し、keyは置換対象外文字やtagを含んだポジション(<div>タグ等を含む)を格納する
+		* @param strCurrentKwd_i 現在正規表現でヒットしている文字列
+		* @param intCurrentPos_i タグを含めた現在のposition
+		* @param intStatus_i 0：置換対象外(半角文字等) 1：対象 2：tag
+		*/
+		function searchAnalysis(hashRetStructure_i, listLastNotTagPos_i, strCurrentKwd_i, intCurrentPos_i, intStatus_i) {
+			var intCntPos = Object.keys(hashRetStructure_i).length;
+			var intNotTagPos = 0;
+			objHtmlStructure = null;
+			var arrTmp = strCurrentKwd_i.split("");
+			var strTgt = "";
+
+			if (listLastNotTagPos_i.length != 0) { //tag抜き文字の最終を取得する
+				intNotTagPos = listLastNotTagPos_i[listLastNotTagPos_i.length - 1];
+			} //if
+
+			for (var i = 0; i < arrTmp.length; i++) {
+				objHtmlStructure = new HtmlStructure();
+				strTgt = arrTmp[i];
+				objHtmlStructure.strTgt = strTgt;
+				objHtmlStructure.intStatus = intStatus_i;
+				if (intStatus_i == 1) { //通常文字はintNotTagPosをカウント
+					intNotTagPos++;
+					objHtmlStructure.intNotTagPos = intNotTagPos;
+				} //if
+				hashRetStructure_i[intCntPos + (i + 1)] = objHtmlStructure;
+			} //for
+
+			if (intStatus_i == 1) { //通常時はtag抜き文字の最終を格納
+				listLastNotTagPos_i.push(intNotTagPos);
+			} //if
+		} //function
+
+		/**
+		 * 全文検索エンジンに返した結果を置換してbodyを入れ替え、または赤文字変換した文字列を取得
+		 * @param hashBodyStructure_i HTMLのchar毎の情報を格納するクラスを格納したhash key：HTMLのindex : val HTMLのchar(index)毎の情報を格納するクラス
+		 * @param intStatus_i 置換ステータス :マスク 2:赤文字
+		 * @return 置換したBody文字列
+		 */
+		function bodyReplace(hashBodyStructure_i, intStatus_i) {
+			var strRepBody = "";
+			var intStatus = 0;
+			var intNotTagPos = 0;
+
+			for (var i = 1; i < Object.keys(hashBodyStructure_i).length + 1; i++) {
+				var objHtmlStructure = hashBodyStructure_i[i];
+				intStatus = objHtmlStructure.intStatus;
+				intNotTagPos = objHtmlStructure.intNotTagPos;
+				if (intStatus == 1) { //通常文字の場合
+					if (intStatus_i == 1) {
+						strRepBody += MASK_BF + MASK_MSG + MASK_AF; //マスク
+					} else {
+						strRepBody += RED_BF + objHtmlStructure.strTgt + RED_AF; //赤塗り
+					} //if
+				} else { //その他の場合そのまま出力する
+					strRepBody += objHtmlStructure.strTgt;
+				} //if
+			} //for
+			return strRepBody;
+		} //function
+
+
+		///////////////////以下テスト用//////////////
+		//test要
+		function testFunc() {
+
+			//選択されていなかったらreturn
+			if (document.getSelection().toString() == "") {
+				return;
+			} //if
+
+			var intMaskStatus = 1;
+			var objSelection = window.getSelection(); // 選択範囲のオブジェクト取得
+			var objParentDom = objSelection.focusNode.parentNode; //変換元のdom
+			// var objTgtdom = objSelection.getRangeAt(0).cloneContents();// 1つ目の選択範囲のDOMをDocumentFragmentにコピー
+			// var strSelectiOuterHtml = $('<div>').append(objTgtdom).html(); //DocumentFragmentの中途半端なOuterHtmlを取得
+			// var strSelectiOuterHtml = $('<div>').append(objTgtdom); //DocumentFragmentの中途半端なOuterHtmlを取得
+			var objTgtRange = objSelection.getRangeAt(0); //rangeを取得
+			var objInitDom;
+			if (objTgtRange.commonAncestorContainer.nodeType == 1) { //対象がDomの場合
+				objInitDom=objTgtRange.commonAncestorContainer //rangeの最初のDomを取得				
+			}else{
+				objInitDom=objTgtRange.commonAncestorContainer.parentElement; //rangeの最初のDomを取得
+			} //if
+			var strInitInner=objInitDom.innerHTML; //bodyからの位置取得のためにouterHtml取得
+			var strInnerBody = document.body.innerHTML;
+			//対象の部分文字列を取得
+			var strTgtVal = strInnerBody.substr(strInnerBody.indexOf(strInitInner) + objTgtRange.startOffset ,objTgtRange.endOffset - objTgtRange.startOffset);
+
+
+			var hashBodyStructure = {};
+			hashBodyStructure = getBodyStructure(strSelectiOuterHtml);
+			var strRepBody = bodyReplace(hashBodyStructure, intMaskStatus);
+			console.log(strRepBody);
+			return strRepBody;
+
+		} //function
+
+		function getSelectionHtml() {
+			var htmlContent = ''
+			var range = window.getSelection().getRangeAt(0);
+			var content = range.cloneContents();
+
+			$('body').append('<span id="selection_html_placeholder"></span>');
+			var placeholder = document.getElementById('selection_html_placeholder');
+
+			placeholder.appendChild(content);
+
+			htmlContent = placeholder.innerHTML;
+			$('#selection_html_placeholder').remove();
+
+			return htmlContent;
+		}
+
+
+
+		// //test用 右クリック時発火
+		// window.onload = function () {
+		// 	document.body.addEventListener('onkeyup', function (e) {
+		// 		// var strRet= testFunc();
+		// 		console.log("");
+		// 	},false); //function 			
+		// 	// document.body.addEventListener('contextmenu', function (e) {
+		// 	// 	var strRet= testFunc();
+		// 	// 	console.log(strRet);
+		// 	// }); //function 
+		// } //function
+
+
+	</script>
+
+</head>
+
+<body onmouseup="testFunc()">
+
+	<div>
+		<div style="-aw-headerfooter-type:header-primary">
+			<p style="margin-top:0pt; margin-bottom:0pt; text-align:justify; widows:0; orphans:0; font-size:12pt"><span
+					style="height:0pt; text-align:left; display:block; position:absolute; z-index:-65535"></span><span
+					style="font-family:游明朝; font-size:10.5pt">ヘッダーtest</span><span
+					style="font-family:游明朝; color:#ff0000">あいうえおヘッダ</span></p>
+		</div>
+		<p style="margin-top:0pt; margin-bottom:0pt; text-align:justify; widows:0; orphans:0; font-size:12pt"><span
+				style="font-family:游明朝; font-weight:bold; color:#ff0000">Evaluation Only. Created with Aspose.Words.
+				Copyright 2003-2019 Aspose Pty Ltd.</span></p>
+		<p style="margin-top:0pt; margin-bottom:0pt; text-align:center; widows:0; orphans:0; font-size:11pt"><span
+				style="font-family:游明朝; font-weight:bold">Java</span><span
+				style="font-family:游明朝; font-weight:bold">言語の黒塗り文書の技術調査</span></p>
+		<p style="margin-top:0pt; margin-bottom:0pt; text-align:justify; widows:0; orphans:0; font-size:10.5pt"><span
+				style="font-family:游明朝">Apache</span><span style="font-family:游明朝"> POI</span><span
+				style="font-family:游明朝">を用いたo</span><span style="font-family:游明朝">ffice</span><span
+				style="font-family:游明朝">ファイルの操作について技術調査を実施しました。</span></p>
+		<p style="margin-top:0pt; margin-bottom:0pt; text-align:justify; widows:0; orphans:0; font-size:10.5pt"><span
+				style="font-family:游明朝; -aw-import:ignore">&#xa0;</span></p>
+		<p style="margin-top:0pt; margin-bottom:0pt; text-align:justify; widows:0; orphans:0; font-size:10.5pt"><span
+				style="font-family:游明朝">J</span><span style="font-family:游明朝">ava</span><span
+				style="font-family:游明朝">の技術調査をまとめた表(</span><span style="font-family:游明朝">途中段階</span><span
+				style="font-family:游明朝">)</span></p>
+		<p style="margin-top:0pt; margin-bottom:0pt; text-align:justify; widows:0; orphans:0; font-size:10.5pt"><span
+				style="font-family:游明朝">¥¥yoks3104¥Project¥NES_文書管理システム¥01_作業内容調査¥作業中</span><span
+				style="font-family:游明朝">¥</span><span style="font-family:游明朝">Java_PDF変換_調査内容.xlsx</span></p>
+		<p style="margin-top:0pt; margin-bottom:0pt; text-align:justify; widows:0; orphans:0; font-size:10.5pt"><span
+				style="font-family:游明朝; -aw-import:ignore">&#xa0;</span></p>
+		<p style="margin-top:0pt; margin-bottom:0pt; text-align:justify; widows:0; orphans:0; font-size:10.5pt"><span
+				style="font-family:游明朝">Apache</span><span style="font-family:游明朝"> POI</span><span
+				style="font-family:游明朝">参考資料</span></p>
+		<p style="margin-top:0pt; margin-bottom:0pt; text-align:justify; widows:0; orphans:0; font-size:10.5pt"><span
+				style="font-family:游明朝">O</span><span style="font-family:游明朝">ffice</span><span
+				style="font-family:游明朝">ファイルの読み書きができる。しかも、O</span><span style="font-family:游明朝">ffice</span><span
+				style="font-family:游明朝">が入っていなくても実行することができる。</span></p>
+		<p style="margin-top:0pt; margin-bottom:0pt; text-align:justify; widows:0; orphans:0; font-size:10.5pt"><a
+				href="https://ameblo.jp/trap-z/entry-11625993673.html" style="text-decoration:none"><span
+					style="font-family:游明朝; text-decoration:underline; color:#0000ff">https://ameblo.jp/trap-z/entry-11625993673.html</span></a>
+		</p>
+		<p style="margin-top:0pt; margin-bottom:0pt; text-align:justify; widows:0; orphans:0; font-size:10.5pt"><span
+				style="font-family:游明朝">Apache</span><span style="font-family:游明朝"> POI</span><span
+				style="font-family:游明朝">を用いた</span><span style="font-family:游明朝">Word</span><span
+				style="font-family:游明朝">をP</span><span style="font-family:游明朝">DF</span><span
+				style="font-family:游明朝">に変換する。(</span><span style="font-family:游明朝">iText</span><span
+				style="font-family:游明朝">を用いた方法</span><span style="font-family:游明朝">)</span></p>
+		<p style="margin-top:0pt; margin-bottom:0pt; text-align:justify; widows:0; orphans:0; font-size:10.5pt"><a
+				href="https://codeday.me/jp/qa/20190511/796845.html" style="text-decoration:none"><span
+					style="font-family:游明朝; text-decoration:underline; color:#0000ff">https://codeday.me/jp/qa/20190511/796845.h</span><span
+					style="font-family:游明朝; text-decoration:underline; color:#0000ff">tml</span></a></p>
+		<p style="margin-top:0pt; margin-bottom:0pt; text-align:justify; widows:0; orphans:0; font-size:10.5pt"><span
+				style="font-family:游明朝">Apache</span><span style="font-family:游明朝"> POI</span><span
+				style="font-family:游明朝">は商用利用することが可能である。</span></p>
+		<p style="margin-top:0pt; margin-bottom:0pt; text-align:justify; widows:0; orphans:0; font-size:10.5pt"><a
+				href="https://reikawatanabe.com/blog/whats-apache-license-v2/" style="text-decoration:none"><span
+					style="font-family:游明朝; text-decoration:underline; color:#0000ff">https://reikawatanabe.com/blog/whats-apache-license-v2/</span></a>
+		</p>
+		<p style="margin-top:0pt; margin-bottom:0pt; text-align:justify; widows:0; orphans:0; font-size:10.5pt"><a
+				href="https://qiita.com/enk/items/3ac7e10eb3c21b309ddd" style="text-decoration:none"><span
+					style="font-family:游明朝; text-decoration:underline; color:#0000ff">https://qiita.com/enk/items/3ac7</span><span
+					style="font-family:游明朝; text-decoration:underline; color:#0000ff">e10eb3c21b309ddd</span></a></p>
+		<p style="margin-top:0pt; margin-bottom:0pt; text-align:justify; widows:0; orphans:0; font-size:10.5pt"><span
+				style="font-family:游明朝">Apache</span><span style="font-family:游明朝"> POI</span><span
+				style="font-family:游明朝">を用いた文字列の抽出について</span></p>
+		<p style="margin-top:0pt; margin-bottom:0pt; text-align:justify; widows:0; orphans:0; font-size:10.5pt"><a
+				href="https://irof.hateblo.jp/entry/20101116/p1" style="text-decoration:none"><span
+					style="font-family:游明朝; text-decoration:underline; color:#0000ff">https://irof.hateblo.jp/entry/20101116/p1</span></a>
+		</p>
+		<p style="margin-top:0pt; margin-bottom:0pt; text-align:justify; widows:0; orphans:0; font-size:10.5pt"><span
+				style="font-family:游明朝">Apache</span><span style="font-family:游明朝"> POI</span><span
+				style="font-family:游明朝">を用いた文字列の置換について</span></p>
+		<p style="margin-top:0pt; margin-bottom:0pt; text-align:justify; widows:0; orphans:0; font-size:10.5pt"><a
+				href="https://code-examples.net/ja/q/1714f4f" style="text-decoration:none"><span
+					style="font-family:游明朝; text-decoration:underline; color:#0000ff">https://code-examples.net/ja/q/1714f4f</span></a>
+		</p>
+		<p style="margin-top:0pt; margin-bottom:0pt; text-align:justify; widows:0; orphans:0; font-size:10.5pt"><a
+				href="https://www.code-adviser.com/detail_22268898" style="text-decoration:none"><span
+					style="font-family:游明朝; text-decoration:underline; color:#0000ff">https://www.code-adviser.com/detail_22268898</span></a>
+		</p>
+		<p style="margin-top:0pt; margin-bottom:0pt; text-align:justify; widows:0; orphans:0; font-size:10.5pt"><span
+				style="font-family:游明朝">Apache</span><span style="font-family:游明朝"> POI</span><span
+				style="font-family:游明朝">のインストール方法</span></p>
+		<p style="margin-top:0pt; margin-bottom:0pt; text-align:justify; widows:0; orphans:0; font-size:10.5pt"><a
+				href="https://www.javadrive.jp/poi/install/" style="text-decoration:none"><span
+					style="font-family:游明朝; text-decoration:underline; color:#0000ff">https://www.javadrive.jp/poi/install/</span></a>
+		</p>
+		<p style="margin-top:0pt; margin-bottom:0pt; text-align:justify; widows:0; orphans:0; font-size:10.5pt"><span
+				style="font-family:游明朝">S</span><span style="font-family:游明朝">pringb</span><span
+				style="font-family:游明朝">o</span><span style="font-family:游明朝">ot</span><span style="font-family:游明朝">
+				にApache</span><span style="font-family:游明朝"> POI</span><span style="font-family:游明朝">を導入する方法</span></p>
+		<p style="margin-top:0pt; margin-bottom:0pt; text-align:justify; widows:0; orphans:0; font-size:10.5pt"><a
+				href="https://qiita.com/yukihigasi/items/74c961cffe11899abab0" style="text-decoration:none"><span
+					style="font-family:游明朝; text-decoration:underline; color:#0000ff">https://qiita.com/yukihigasi/items/74c961cffe11899abab0</span></a>
+		</p>
+		<p style="margin-top:0pt; margin-bottom:0pt; text-align:justify; widows:0; orphans:0; font-size:10.5pt"><span
+				style="font-family:游明朝; -aw-import:ignore">&#xa0;</span></p>
+		<p style="margin-top:0pt; margin-bottom:0pt; font-size:10.5pt"><br
+				style="page-break-before:always; clear:both" /></p>
+		<p style="margin-top:0pt; margin-bottom:0pt; text-align:justify; widows:0; orphans:0; font-size:10.5pt"><span
+				style="font-family:游明朝; -aw-import:ignore">&#xa0;</span></p>
+		<p style="margin-top:0pt; margin-bottom:0pt; text-align:justify; widows:0; orphans:0; font-size:10.5pt"><span
+				style="font-family:游明朝; -aw-import:ignore">&#xa0;</span></p>
+		<p style="margin-top:0pt; margin-bottom:0pt; text-align:justify; widows:0; orphans:0; font-size:10.5pt"><span
+				style="font-family:游明朝">test</span><span style="font-family:游明朝">表</span></p>
+		<table cellspacing="0" cellpadding="0" style="border:0.75pt solid #000000; border-collapse:collapse">
+			<tr>
+				<td
+					style="width:130.75pt; border-right-style:solid; border-right-width:0.75pt; border-bottom-style:solid; border-bottom-width:0.75pt; padding-right:5.03pt; padding-left:5.03pt; vertical-align:top">
+					<p
+						style="margin-top:0pt; margin-bottom:0pt; text-align:justify; widows:0; orphans:0; font-size:10.5pt">
+						<span style="font-family:游明朝">あああofficeいいい</span></p>
+				</td>
+				<td
+					style="width:130.75pt; border-right-style:solid; border-right-width:0.75pt; border-left-style:solid; border-left-width:0.75pt; border-bottom-style:solid; border-bottom-width:0.75pt; padding-right:5.03pt; padding-left:5.03pt; vertical-align:top">
+					<p
+						style="margin-top:0pt; margin-bottom:0pt; text-align:justify; widows:0; orphans:0; font-size:10.5pt">
+						<span style="font-family:游明朝; -aw-import:ignore">&#xa0;</span></p>
+				</td>
+				<td
+					style="width:130.8pt; border-left-style:solid; border-left-width:0.75pt; border-bottom-style:solid; border-bottom-width:0.75pt; padding-right:5.03pt; padding-left:5.03pt; vertical-align:top">
+					<p
+						style="margin-top:0pt; margin-bottom:0pt; text-align:justify; widows:0; orphans:0; font-size:10.5pt">
+						<span style="font-family:游明朝; -aw-import:ignore">&#xa0;</span></p>
+				</td>
+			</tr>
+			<tr>
+				<td
+					style="width:130.75pt; border-top-style:solid; border-top-width:0.75pt; border-right-style:solid; border-right-width:0.75pt; padding-right:5.03pt; padding-left:5.03pt; vertical-align:top">
+					<p
+						style="margin-top:0pt; margin-bottom:0pt; text-align:justify; widows:0; orphans:0; font-size:10.5pt">
+						<span style="font-family:游明朝; -aw-import:ignore">&#xa0;</span></p>
+				</td>
+				<td
+					style="width:130.75pt; border-top-style:solid; border-top-width:0.75pt; border-right-style:solid; border-right-width:0.75pt; border-left-style:solid; border-left-width:0.75pt; padding-right:5.03pt; padding-left:5.03pt; vertical-align:top">
+					<p
+						style="margin-top:0pt; margin-bottom:0pt; text-align:justify; widows:0; orphans:0; font-size:10.5pt">
+						<span style="font-family:游明朝; -aw-import:ignore">&#xa0;</span></p>
+				</td>
+				<td
+					style="width:130.8pt; border-top-style:solid; border-top-width:0.75pt; border-left-style:solid; border-left-width:0.75pt; padding-right:5.03pt; padding-left:5.03pt; vertical-align:top">
+					<p
+						style="margin-top:0pt; margin-bottom:0pt; text-align:justify; widows:0; orphans:0; font-size:10.5pt">
+						<span style="font-family:游明朝; -aw-import:ignore">&#xa0;</span></p>
+				</td>
+			</tr>
+		</table>
+		<p style="margin-top:0pt; margin-bottom:0pt; text-align:justify; widows:0; orphans:0; font-size:10.5pt"><span
+				style="font-family:游明朝; -aw-import:ignore">&#xa0;</span></p>
+		<p style="margin-top:0pt; margin-bottom:0pt; text-align:justify; widows:0; orphans:0; font-size:10.5pt"><span
+				style="font-family:游明朝; -aw-import:ignore">&#xa0;</span></p>
+
+		<p style="margin-top:0pt; margin-bottom:0pt; text-align:justify; widows:0; orphans:0; font-size:10.5pt"><span
+				style="font-family:游明朝; -aw-import:ignore">&#xa0;</span></p>
+		<p style="margin-top:0pt; margin-bottom:0pt; text-align:justify; widows:0; orphans:0; font-size:10.5pt"><span
+				style="font-family:游明朝; -aw-import:ignore">&#xa0;</span></p>
+		<p style="margin-top:0pt; margin-bottom:0pt; text-align:justify; widows:0; orphans:0; font-size:10.5pt"><span
+				style="font-family:游明朝">test</span><span style="font-family:游明朝">表</span><span
+				style="font-family:游明朝">2</span></p>
+		<table cellspacing="0" cellpadding="0" style="border:0.75pt solid #000000; border-collapse:collapse">
+			<tr>
+				<td
+					style="width:130.75pt; border-right-style:solid; border-right-width:0.75pt; border-bottom-style:solid; border-bottom-width:0.75pt; padding-right:5.03pt; padding-left:5.03pt; vertical-align:top">
+					<p
+						style="margin-top:0pt; margin-bottom:0pt; text-align:justify; widows:0; orphans:0; font-size:10.5pt">
+						<span style="font-family:游明朝">行1 列1</span></p>
+				</td>
+				<td
+					style="width:130.75pt; border-right-style:solid; border-right-width:0.75pt; border-left-style:solid; border-left-width:0.75pt; border-bottom-style:solid; border-bottom-width:0.75pt; padding-right:5.03pt; padding-left:5.03pt; vertical-align:top">
+					<p
+						style="margin-top:0pt; margin-bottom:0pt; text-align:justify; widows:0; orphans:0; font-size:10.5pt">
+						<span style="font-family:游明朝; -aw-import:ignore">&#xa0;</span></p>
+				</td>
+				<td
+					style="width:130.8pt; border-left-style:solid; border-left-width:0.75pt; border-bottom-style:solid; border-bottom-width:0.75pt; padding-right:5.03pt; padding-left:5.03pt; vertical-align:top">
+					<p
+						style="margin-top:0pt; margin-bottom:0pt; text-align:justify; widows:0; orphans:0; font-size:10.5pt">
+						<span style="font-family:游明朝; -aw-import:ignore">&#xa0;</span></p>
+				</td>
+			</tr>
+			<tr>
+				<td
+					style="width:130.75pt; border-top-style:solid; border-top-width:0.75pt; border-right-style:solid; border-right-width:0.75pt; padding-right:5.03pt; padding-left:5.03pt; vertical-align:top">
+					<p
+						style="margin-top:0pt; margin-bottom:0pt; text-align:justify; widows:0; orphans:0; font-size:10.5pt">
+						<span style="font-family:游明朝; -aw-import:ignore">&#xa0;</span></p>
+				</td>
+				<td
+					style="width:130.75pt; border-top-style:solid; border-top-width:0.75pt; border-right-style:solid; border-right-width:0.75pt; border-left-style:solid; border-left-width:0.75pt; padding-right:5.03pt; padding-left:5.03pt; vertical-align:top">
+					<p
+						style="margin-top:0pt; margin-bottom:0pt; text-align:justify; widows:0; orphans:0; font-size:10.5pt">
+						<span style="font-family:游明朝; -aw-import:ignore">&#xa0;</span></p>
+				</td>
+				<td
+					style="width:130.8pt; border-top-style:solid; border-top-width:0.75pt; border-left-style:solid; border-left-width:0.75pt; padding-right:5.03pt; padding-left:5.03pt; vertical-align:top">
+					<p
+						style="margin-top:0pt; margin-bottom:0pt; text-align:justify; widows:0; orphans:0; font-size:10.5pt">
+						<span style="font-family:游明朝">行2 列3</span></p>
+				</td>
+			</tr>
+		</table>
+		<p style="margin-top:0pt; margin-bottom:0pt; text-align:justify; widows:0; orphans:0; font-size:10.5pt"><span
+				style="font-family:游明朝; -aw-import:ignore">&#xa0;</span></p>
+		<p style="margin-top:0pt; margin-bottom:0pt; text-align:justify; widows:0; orphans:0; font-size:10.5pt"><span
+				style="font-family:游明朝; -aw-import:ignore">&#xa0;</span></p>
+		<p style="margin-top:0pt; margin-bottom:0pt; text-align:justify; widows:0; orphans:0; font-size:10.5pt"><span
+				style="font-family:游明朝; -aw-import:ignore">&#xa0;</span></p>
+		<p style="margin-top:0pt; margin-bottom:0pt; text-align:justify; widows:0; orphans:0; font-size:10.5pt"><span
+				style="font-family:游明朝; -aw-import:ignore">&#xa0;</span></p>
+		<p style="margin-top:0pt; margin-bottom:0pt; text-align:justify; widows:0; orphans:0; font-size:10.5pt"><span
+				style="font-family:游明朝; -aw-import:ignore">&#xa0;</span></p>
+		<p style="margin-top:0pt; margin-bottom:0pt; text-align:justify; widows:0; orphans:0; font-size:10.5pt"><span
+				style="font-family:游明朝; -aw-import:ignore">&#xa0;</span></p>
+		<p style="margin-top:0pt; margin-bottom:0pt; text-align:justify; widows:0; orphans:0; font-size:10.5pt"><span
+				style="font-family:游明朝; -aw-import:ignore">&#xa0;</span></p>
+		<p style="margin-top:0pt; margin-bottom:0pt; text-align:justify; widows:0; orphans:0; font-size:10.5pt"><span
+				style="font-family:游明朝; -aw-import:ignore">&#xa0;</span></p>
+		<p style="margin-top:0pt; margin-bottom:0pt; text-align:justify; widows:0; orphans:0; font-size:10.5pt"><span
+				style="font-family:游明朝; -aw-import:ignore">&#xa0;</span></p>
+		<p style="margin-top:0pt; margin-bottom:0pt; text-align:justify; widows:0; orphans:0; font-size:10.5pt"><span
+				style="font-family:游明朝; -aw-import:ignore">&#xa0;</span></p>
+
+		<p style="margin-top:0pt; margin-bottom:0pt; text-align:justify; widows:0; orphans:0; font-size:10.5pt"><span
+				style="font-family:游明朝; -aw-import:ignore">&#xa0;</span></p>
+		<p style="margin-top:0pt; margin-bottom:0pt; text-align:justify; widows:0; orphans:0; font-size:10.5pt"><span
+				style="font-family:游明朝; -aw-import:ignore">&#xa0;</span></p>
+		<p style="margin-top:0pt; margin-bottom:0pt; text-align:justify; widows:0; orphans:0; font-size:10.5pt"><span
+				style="font-family:游明朝; -aw-import:ignore">&#xa0;</span></p>
+		<p style="margin-top:0pt; margin-bottom:0pt; text-align:justify; widows:0; orphans:0; font-size:10.5pt"><span
+				style="font-family:游明朝; -aw-import:ignore">&#xa0;</span></p>
+		<p style="margin-top:0pt; margin-bottom:0pt; font-size:10.5pt"><br
+				style="page-break-before:always; clear:both" /></p>
+		<p style="margin-top:0pt; margin-bottom:0pt; text-align:justify; widows:0; orphans:0; font-size:10.5pt"><span
+				style="font-family:游明朝; -aw-import:ignore">&#xa0;</span></p>
+		<p style="margin-top:0pt; margin-bottom:0pt; text-align:justify; widows:0; orphans:0; font-size:10.5pt"><span
+				style="font-family:游明朝; -aw-import:ignore">&#xa0;</span></p>
+		<p style="margin-top:0pt; margin-bottom:0pt; text-align:justify; widows:0; orphans:0; font-size:10.5pt"><span
+				style="font-family:游明朝">T</span><span style="font-family:游明朝">estグラフ</span></p>
+
+		<div style="-aw-headerfooter-type:footer-primary">
+			<p style="margin-top:0pt; margin-bottom:0pt; text-align:justify; widows:0; orphans:0; font-size:12pt"><span
+					style="font-family:游明朝; font-weight:bold; color:#ff0000">Created with an evaluation copy of
+					Aspose.Words. To discover the full versions of our APIs please visit:
+					https://products.aspose.com/words/</span></p>
+			<p style="margin-top:0pt; margin-bottom:0pt; text-align:justify; widows:0; orphans:0; font-size:10.5pt">
+				<span style="font-family:游明朝">フッダー</span><span style="font-family:游明朝">test</span></p>
+		</div>
+	</div>
+
+
+
+</body>
+
+</html>
