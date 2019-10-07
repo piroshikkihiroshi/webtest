@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html>
+
+
+<head>
+    <meta charset="UTF-8">
+
+
+    <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/bootstrap/3.2.0/css/bootstrap.min.css">
+    <script src="//ajax.googleapis.com/ajax/libs/jquery/1.11.1/jquery.min.js"></script>
+    <script src="./docMask.js"></script>
+
+    <title>Mask View</title>
+
+    <!-- メニューCSS -->
+    <style>
+        #contextmenu,#contextmenu_red {
+            display: none;
+            position: fixed;
+        }
+
+        #contextmenu li,#contextmenu_red li {
+            cursor: pointer;
+        }
+        #contextmenu :hover,#contextmenu_red  :hover {
+            background-color:#c6c8ca;;
+        }
+
+    </style>
+    <script>
+        /**
+         グローバル変数 
+        */
+        var glObjRedFlame;
+        var glObjRedBody;
+        var glObjMaskFlame;
+        var glObjMaskBody;
+        var glContextDom;
+
+        //init処理
+        //左右画面でスクロールの同期
+        $(function () {
+            var repDiv = $("#repDiv");
+            var maskDiv = $("#maskDiv");
+            maskDiv.scroll(function () {
+                repDiv.scrollTop(maskDiv.scrollTop());
+                repDiv.scrollLeft(maskDiv.scrollLeft());
+                objTgtIfreamScrollTop = repDiv.scrollTop();
+                objTgtIfreamScrollLeft = repDiv.scrollLeft();
+            }); //maskDiv.scroll(function ()
+
+
+            repDiv.scroll(function () {
+                maskDiv.scrollTop(repDiv.scrollTop());
+                maskDiv.scrollLeft(repDiv.scrollLeft());
+            }); //repDiv.scroll(function ()
+
+
+        }); //$(function ()
+
+        /**
+         * MaskしたHtmlを抜き出し、PDFを作成するサーブレットを呼び出す
+         * @param strHtml_i
+         * @return 抜き出したBody
+         */
+        function saveMaskPdf() {
+            var glObjMaskFlame = document.getElementById('mask');
+            var strMaskHtml = glObjMaskFlame.contentWindow.document.documentElement.outerHTML;
+            // var strMaskHtml = glObjMaskFlame.contentWindow.document.body.outerHTML;
+            var objForm = document.createElement('form');
+            var objReq = document.createElement('input');
+            var objReq2 = document.createElement('input');
+
+            objForm.method = 'POST';
+            objForm.action = "<%=request.getContextPath()%>/MakePdfCnt";
+
+            objReq.type = 'hidden'; //入力フォームが表示されないように
+            objReq.name = 'maskPdfHtml';
+            objReq.value = strMaskHtml;
+
+            objReq2.type = 'hidden'; //入力フォームが表示されないように
+            objReq2.name = 'tmpDir';
+            objReq2.value = '<%=strTmpDirName%>';
+
+            objForm.appendChild(objReq);
+            objForm.appendChild(objReq2);
+            document.body.appendChild(objForm);
+
+            objForm.submit();
+
+
+        } //function
+
+        /**
+         * 編集可能なステータスに変更する(準備中)
+         */
+        function editMask() {
+            alert("準備中");
+        } //function
+
+
+        //読み込み終わってからiflameは処理
+        document.addEventListener('DOMContentLoaded', function () {
+
+            $('#red').load(function () {
+                glObjRedFlame = document.getElementById("red").contentDocument;
+                glObjRedBody = glObjRedFlame.body;
+                var strTagName = TAG_RED;
+                glIdCnt = 0;
+                allIdPut(glObjRedBody, strTagName);
+                //Event追加
+                // glObjRedBody.addEventListener("mouseup", tgtMaskChk,false);
+                //コンテキストメニュー 
+                glObjRedBody.oncontextmenu = function () { //デフォルト無効
+                    return false;
+                };
+                glObjRedBody.addEventListener("mousedown", contextNone,false);
+                glObjRedBody.addEventListener('contextmenu', contextFunc,false);
+                // glObjRedBody.addEventListener('click', click_act,false);
+                glContextDom = document.getElementById('contextmenu_red');
+
+
+
+
+            });// function
+            
+            $('#mask').load(function () {
+                glObjMaskFlame = document.getElementById("mask").contentDocument;
+                glObjMaskBody = glObjMaskFlame.body;
+                var strTagName = TAG_MASK;
+                glIdCnt = 0;
+                allIdPut(glObjMaskBody, strTagName);
+            });// function        
+        }, false);// function
+
+
+    </script>
+
+<body>
+
+    <div class="container-fluid">
+        <div class="form-group">
+            <div class="col-lg-offset-2 col-lg-1">
+                <button type="button" onclick="editMask()" class="btn btn-success">編集</button>
+            </div>
+            <div class="col-lg-1">
+                <button type="button" onclick="editMask()" class="btn btn-success">一時保存</button>
+            </div>            
+            <div class="col-lg-1">
+                <button type="button" onclick="editMask()" class="btn btn-success">再開</button>
+            </div>            
+            <div class="col-lg-1">
+                <button type="button" onclick="editMask()" class="btn btn-success">保存削除</button>
+            </div>                        
+
+            <div class="col-lg-offset-4  col-lg-1">
+                <button type="button" onclick="editMask()" class="btn btn-success">参照文書表示</button>
+            </div>
+            <div class="col-lg-1">
+                <button type="button" onclick="editMask()" class="btn btn-info">黒塗りリスト</button>
+            </div>
+        </div>
+
+
+        <div id="repDiv" class="col-lg-6" style="overflow: auto; height: 800px;">
+            <iframe class="col-lg-12" id="red" src="./repTest/test.html" name="red" height="900" scrolling="no">
+            </iframe>
+        </div>
+        <div id="maskDiv" class="col-lg-6" style="overflow: auto; height: 800px;">
+            <iframe class="col-lg-12" id="mask" src="./maskTest/test.html" name="red" height="900"
+                scrolling="no"></iframe>
+        </div>
+        <div class="col-lg-offset-11 col-lg-1">
+            <button type="button" onclick="saveMaskPdf()" class="btn btn-info">保存</button>
+        </div>
+    </div>
+
+    <!-- メニュー内容 -->
+    <div id="contextmenu">
+        <ul class="list-group">
+            <li class="list-group-item" onClick="tgtMaskChk()">候補指定</li>
+            <li class="list-group-item" onClick="menu2()">ポリシー指定</li>
+            <li class="list-group-item" onClick="cancel()">キャンセル</li>
+        </ul>
+    </div>
+
+    <!-- 赤文字選択時メニュー内容 -->
+    <div id="contextmenu_red">
+        <ul class="list-group">
+            <li class="list-group-item" onClick="menu3()">範囲変更</li>
+            <li class="list-group-item" onClick="tgtMaskRelease()">候補解除</li>
+            <li class="list-group-item" onClick="menu5()">ポリシー変更</li>
+            <li class="list-group-item" onClick="cancel()">キャンセル</li>
+        </ul>
+    </div>
+</body>
+
+
+</html>
