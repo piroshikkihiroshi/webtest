@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="">
+    <meta name="author" content="">
+
+    <title>Blog Template for Bootstrap · Bootstrap</title>
+
+    <!-- bootstrap 4 -->
+    <link rel="stylesheet" href="//stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css"
+        integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T" crossorigin="anonymous">
+    <script src="//code.jquery.com/jquery-3.3.1.slim.min.js"
+        integrity="sha384-q8i/X+965DzO0rT7abK41JStQIAqVgRVzpbzo5smXKp4YfRvH+8abtTE1Pi6jizo"
+        crossorigin="anonymous"></script>
+    <script src="//cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.7/umd/popper.min.js"
+        integrity="sha384-UO2eT0CpHqdSJQ6hJty5KVphtPhzWj9WO1clHTMGa3JDZwrnQq4sF86dIHNDz0W1"
+        crossorigin="anonymous"></script>
+    <script src="//stackpath.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js"
+        integrity="sha384-JjSmVgyd0p3pXB1rRibZUAYoIIy6OrQ6VrjIEaFf/nJGzIxFDsf4x0xIM+B07jRM"
+        crossorigin="anonymous"></script>
+
+    <!-- service workerの登録関係 -->
+    <!-- ios -->
+    <!-- アドレスバー等のブラウザのUIを非表示 -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <!-- default（Safariと同じ） / black（黒） / black-translucent（ステータスバーをコンテンツに含める） -->
+    <meta name="apple-mobile-web-app-status-bar-style" content="black">
+    <!-- ホーム画面に表示されるアプリ名 -->
+    <meta name="apple-mobile-web-app-title" content="PRORP">
+    <!-- ホーム画面に表示されるアプリアイコン -->
+    <link rel="apple-touch-icon" href="images/icons/icon-192.png">
+
+    <!-- android -->
+    <link rel="manifest" href="manifest.json"><!-- manifestの読み込み -->
+
+
+</head>
+
+<body>
+    <script>
+
+        //service workerの登録関係
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('sw.js').then(function (registration) {
+                console.log('ServiceWorker registration successful with scope: ', registration.scope);
+            }).catch(function (err) {
+                console.log('ServiceWorker registration failed: ', err);
+            });
+        } //if
+
+        //バナーの代わりに表示するボタンを登録する
+        registerInstallAppEvent(document.getElementById("InstallBtn"));
+        //バナー表示をキャンセルし、代わりに表示するDOM要素を登録する関数
+        //引数１：イベントを登録するHTMLElement
+        function registerInstallAppEvent(elem) {
+            //インストールバナー表示条件満足時のイベントを乗っ取る
+            window.addEventListener('beforeinstallprompt', function (event) {
+                console.log("beforeinstallprompt: ", event);
+                event.preventDefault(); //バナー表示をキャンセル
+                elem.promptEvent = event; //eventを保持しておく
+                elem.style.display = "block"; //要素を表示する
+                return false;
+            });
+            
+            //インストールダイアログの表示処理
+            function installApp() {
+                if (elem.promptEvent) {
+                    elem.promptEvent.prompt(); //ダイアログ表示
+                    elem.promptEvent.userChoice.then(function (choice) {
+                        elem.style.display = "none";
+                        elem.promptEvent = null; //一度しか使えないため後始末
+                    });//end then
+                }
+            }//end installApp
+            //ダイアログ表示を行うイベントを追加
+            elem.addEventListener("click", installApp);
+        }//end registerInstallAppEvent
+
+
+        //TODO削除予定 広告を消す
+        function deletevdbanner() {
+            if (document.getElementById("vdbanner") != null) {
+                document.getElementById("vdbanner").outerHTML = '';
+            }
+        }
+        setTimeout(deletevdbanner, 5000);	
+    </script>
+
+
+
+    <h1>インストールボタンを表示する</h1>
+    <button id="InstallBtn" style="display:none">
+        アプリをインストールする
+    </button>
+
+</body>
+
+</html>
