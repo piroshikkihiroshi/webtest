@@ -51,33 +51,35 @@
             });
         } //if
 
-        //バナーの代わりに表示するボタンを登録する
-        registerInstallAppEvent(document.getElementById("InstallBtn"));
-        //バナー表示をキャンセルし、代わりに表示するDOM要素を登録する関数
+
+        //PWA
+        //バナー表示をキャンセルし、代わりに表示するDOM要素を登録する
         //引数１：イベントを登録するHTMLElement
         function registerInstallAppEvent(elem) {
             //インストールバナー表示条件満足時のイベントを乗っ取る
             window.addEventListener('beforeinstallprompt', function (event) {
-                console.log("beforeinstallprompt: ", event);
-                event.preventDefault(); //バナー表示をキャンセル
-                elem.promptEvent = event; //eventを保持しておく
-                elem.style.display = "block"; //要素を表示する
+                //console.log("beforeinstallprompt: ", event);
+                event.preventDefault();			//バナー表示をキャンセル
+                elem.promptEvent = event;		//eventを保持しておく
+                elem.style.display = "inline-block";	//要素を表示する
                 return false;
             });
-            
             //インストールダイアログの表示処理
             function installApp() {
                 if (elem.promptEvent) {
-                    elem.promptEvent.prompt(); //ダイアログ表示
+                    elem.promptEvent.prompt();		//ダイアログ表示
                     elem.promptEvent.userChoice.then(function (choice) {
+                        //console.log(choice);
                         elem.style.display = "none";
-                        elem.promptEvent = null; //一度しか使えないため後始末
+                        elem.promptEvent = null;  //一度しか使えないため後始末
                     });//end then
                 }
             }//end installApp
-            //ダイアログ表示を行うイベントを追加
+            //要素クリック時にダイアログ表示を行う
             elem.addEventListener("click", installApp);
-        }//end registerInstallAppEvent
+        }
+        //表示するボタンに、イベントを登録
+        registerInstallAppEvent(document.getElementById("installBtn"));
 
 
         //TODO削除予定 広告を消す
