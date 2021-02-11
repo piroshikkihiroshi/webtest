@@ -7,6 +7,8 @@
     <meta name="description" content="">
     <meta name="author" content="">
 
+    <link rel="icon" type="image/x-icon" href="./images/icons/icon-72x72.png">
+
     <title>Blog Template for Bootstrap · Bootstrap</title>
 
     <!-- bootstrap 4 -->
@@ -49,7 +51,10 @@
 
     <script>
 
-        //service workerの登録関係
+        /**
+         * PWA
+         * service workerの登録関係 ここに記述するのでsw.jsはスクリプトタグでは読み込まない
+        **/              
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.register('sw.js').then(function (registration) {
                 console.log('ServiceWorker registration successful with scope: ', registration.scope);
@@ -58,10 +63,11 @@
             });
         } //if
 
-
-        //PWA
-        //バナー表示をキャンセルし、代わりに表示するDOM要素を登録する
-        //引数１：イベントを登録するHTMLElement
+        /**
+         * PWA
+         * バナー表示をキャンセルし、代わりに表示するDOM要素を登録する
+         * param：イベントを登録するDOM
+        **/        
         function registerInstallAppEvent(elem) {
             //インストールバナー表示条件満足時のイベントを乗っ取る
             window.addEventListener('beforeinstallprompt', function (event) {
@@ -71,7 +77,10 @@
                 elem.style.display = "inline-block";	//要素を表示する
                 return false;
             });
-            //インストールダイアログの表示処理
+
+            /**
+             *installBtn 押下時発火 
+            **/
             function installApp() {
                 if (elem.promptEvent) {
                     elem.promptEvent.prompt();		//ダイアログ表示
@@ -80,11 +89,11 @@
                         elem.style.display = "none";
                         elem.promptEvent = null;  //一度しか使えないため後始末
                     });//end then
-                }
-            }//end installApp
+                } //if
+            }//function
             //要素クリック時にダイアログ表示を行う
             elem.addEventListener("click", installApp);
-        }
+        } //function
         //表示するボタンに、イベントを登録
         registerInstallAppEvent(document.getElementById("installBtn"));
 
