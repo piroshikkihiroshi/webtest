@@ -4,7 +4,7 @@
   "theme_color": "#eeeeee",
   "background_color": "#eeeeee",
   "display": "standalone",
-  "start_url": "/push_test2/apps/index.html",
+  "start_url": "/webtest/push_test2/apps/index.html",
   "icons": [
     {
       "src": "images/icons/icon-72x72.png",
